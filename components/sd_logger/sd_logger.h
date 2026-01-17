@@ -15,12 +15,12 @@ class SDLogger : public Component,
   void dump_config() override;
   void appendFile(const char *filename, const char *message);
   void writeFile(const char *filename, const char *message);
-  char *getFirstFileFilename(const char *dir = "/");
-  char *readFile(const char *filename);
+  std::string getFirstFileFilename(const char *dir = "/");
+  std::string readFile(const char *filename);
   void deleteFile(const char *filename);
 
  protected:
-  char *createFilename(const char *filename);
+  std::string createFilename(const char *filename);
 };
 
 }  // namespace sd_logger

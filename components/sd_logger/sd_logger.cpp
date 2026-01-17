@@ -33,13 +33,13 @@ void SDLogger::loop() {}
 void SDLogger::dump_config() { ESP_LOGCONFIG(TAG, "SD Logger"); }
 
 void SDLogger::writeFile(const char *filename, const char *message) {
-  char *result = createFilename(filename);
+  std::string result = createFilename(filename);
 
-  ESP_LOGI(TAG, "Writing file: %s", result);
+  ESP_LOGI(TAG, "Writing file: %s", result.c_str());
 
-  File file = SD.open(result, FILE_WRITE);
+  File file = SD.open(result.c_str(), FILE_WRITE);
   if (!file) {
-    ESP_LOGE(TAG, "Failed to open file for writing: %s", result);
+    ESP_LOGE(TAG, "Failed to open file for writing: %s", result.c_str());
     return;
   }
   if (file.print(message)) {
@@ -51,10 +51,10 @@ void SDLogger::writeFile(const char *filename, const char *message) {
 }
 
 void SDLogger::appendFile(const char *filename, const char *message) {
-  char *result = createFilename(filename);
+  std::string result = createFilename(filename);
 
-  ESP_LOGI(TAG, "Appending to file: %s", result);
-  File file = SD.open(result, FILE_APPEND);
+  ESP_LOGI(TAG, "Appending to file: %s", result.c_str());
+  File file = SD.open(result.c_str(), FILE_APPEND);
   if (!file) {
     ESP_LOGE(TAG, "Failed to open file for appending");
     return;
@@ -67,23 +67,15 @@ void SDLogger::appendFile(const char *filename, const char *message) {
   file.close();
 }
 
-char *SDLogger::createFilename(const char *filename) {
-  char prepend_char = '/';
-  size_t len = strlen(filename);
-  size_t new_len = len + 1;
-  char *result = new char[new_len + 1];
-  result[0] = prepend_char;
-  strcpy(result + 1, filename);
-
-  return result;
+std::string SDLogger::createFilename(const char *filename) {
+  return std::string("/") + filename;
 }
 
-char *SDLogger::getFirstFileFilename(const char *dir) {
+std::string SDLogger::getFirstFileFilename(const char *dir) {
   File root = SD.open(dir, FILE_READ);
   if (!root || !root.isDirectory()) {
-    ESP_LOGE(TAG, "Failed to open file for read");
-    char *result = new char[6];
-    return strcpy(result, "false");
+    ESP_LOGE(TAG, "Failed to open directory");
+    return "";
   }
 
   File entry = root.openNextFile();
@@ -94,54 +86,56 @@ char *SDLogger::getFirstFileFilename(const char *dir) {
   }
 
   if (!entry) {
-    ESP_LOGE(TAG, "Failed to open file for read");
-    char *result = new char[6];
-    return strcpy(result, "false");
+    ESP_LOGE(TAG, "No files found");
+    root.close();
+    return "";
   }
 
-  const char *name = entry.name();
-
+  std::string result = createFilename(entry.name());
   root.close();
   entry.close();
 
-  return createFilename(name);
+  return result;
 }
 
-char *SDLogger::readFile(const char *filename) {
-  char c;
+std::string SDLogger::readFile(const char *filename) {
   String parameter;
-  if (strncmp(filename, "/", 1) == 0) {
-    File file = SD.open(filename);
-    if (file) {
-      while (file.available()) {
-        char c = file.read();
-        if (isPrintable(c)) {
-          parameter.concat(c);
-        }
-      }
-      ESP_LOGI(TAG, "%S", parameter);
 
-      char *cString = new char[parameter.length() + 1];
-      strcpy(cString, parameter.c_str());
-
-      return cString;
-    }
-    file.close();
+  if (strncmp(filename, "/", 1) != 0) {
+    ESP_LOGE(TAG, "Invalid filename");
+    return "";
   }
 
-  char *result = new char[6];
-  return strcpy(result, "false");
+  File file = SD.open(filename);
+  if (!file) {
+    ESP_LOGE(TAG, "Failed to open file");
+    return "";
+  }
+
+  while (file.available()) {
+    char c = file.read();
+    if (isPrintable(c)) {
+      parameter.concat(c);
+    }
+  }
+  file.close();
+
+  ESP_LOGI(TAG, "%s", parameter.c_str());
+  return std::string(parameter.c_str());
 }
 
 void SDLogger::deleteFile(const char *filename) {
   if (strncmp(filename, "/", 1) == 0) {
     File file = SD.open(filename);
-
     if (file) {
-      SD.remove(filename);
-      if (!SD.exists(filename)) {
-        ESP_LOGI(TAG, "File deleted.");
+      file.close();
+      if (SD.remove(filename)) {
+        ESP_LOGI(TAG, "File deleted: %s", filename);
+      } else {
+        ESP_LOGE(TAG, "Failed to delete: %s", filename);
       }
+    } else {
+      ESP_LOGE(TAG, "Failed to open file for deletion: %s", filename);
     }
   }
 }
